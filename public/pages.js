@@ -18,7 +18,7 @@ const heading = /^ {0,3}(#{1,6})(?:[ \t]+(.*)|[ \t]*$)/;
 const rule = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/;
 const pagebreak = /^\s*<!--\s*pagebreak\s*-->\s*$/i;
 const quote = /^ {0,3}> ?/;
-const splitCells = line => line.trim().replace(/^\||(?<!\\)\|$/g,'').split(/(?<!\\)\|/).map(c => c.trim());
+const splitCells = line => line.trim().replace(/^\||(?<!\\)\|$/g,'').split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g,'|'));
 const delimiter = line => line && line.includes('|') && splitCells(line).every(c => /^:?-{3,}:?$/.test(c));
 const textHash = s => {
   // Two independent 32-bit lanes, no crypto/subtle or secure origin required.
@@ -45,7 +45,8 @@ function inline(host, source, warn, depth=0, resolveImage) {
   if (depth>16) { host.append(source); return; }
   // Handle angle-wrapped link destinations independently; the tokenizer below
   // only admits an inert URI string and never copies arbitrary attributes.
-  const rx = /\\([\\`*_{}\[\]()#+.!|~>-])|(`+)([^\n]*?)\2|(!?)\[([^\]\n]*)\]\((<[^<>\s]+>|[^\s()<>]+)(?:[ \t]+["'][^\n"']*["'])?\)|(\*\*|__|~~)(?=\S)([\s\S]+?)\7|(\*|_)(?=\S)([^\n]+?)\9| {2,}\n|\\\n/g;
+  // Underscore emphasis requires non-ASCII-word boundaries so identifiers like order_id_list stay literal.
+  const rx = /\\([\\`*_{}\[\]()#+.!|~>-])|(`+)([^\n]*?)\2|(!?)\[([^\]\n]*)\]\((<[^<>\s]+>|[^\s()<>]+)(?:[ \t]+["'][^\n"']*["'])?\)|(\*\*|~~)(?=\S)([\s\S]+?)\7|(?<![A-Za-z0-9_])__(?=\S)([\s\S]+?)(?<=\S)__(?![A-Za-z0-9_])|\*(?=\S)([^\n*]+?)(?<=\S)\*|(?<![A-Za-z0-9_])_(?=\S)([^\n_]+?)(?<=\S)_(?![A-Za-z0-9_])| {2,}\n|\\\n/g;
   let last=0;
   for (const m of source.matchAll(rx)) {
     if (m.index>last) host.append(source.slice(last,m.index));
@@ -56,9 +57,10 @@ function inline(host, source, warn, depth=0, resolveImage) {
       if (!url) { host.append(m[5] || dest); warn(isImage?'图片仅支持本地 /assets/ 或 /media/ 资源。':'已移除不安全链接，保留链接文字。'); }
       else if (isImage) { const img=el('img','fp-md-img'); img.src=url; img.alt=m[5]; host.append(img); }
       else { const a=el('a'); a.href=url; inline(a,m[5],warn,depth+1,resolveImage); host.append(a); }
-    } else if (m[7] || m[9]) {
-      const tag=m[7] ? (m[7]==='~~'?'del':'strong') : 'em';
-      const n=el(tag); inline(n,m[8]??m[10],warn,depth+1,resolveImage); host.append(n);
+    } else if (m[7] || m[9] !== undefined || m[10] !== undefined || m[11] !== undefined) {
+      const tag = m[7] ? (m[7]==='~~'?'del':'strong') : m[9] !== undefined ? 'strong' : 'em';
+      const inner = m[8] ?? m[9] ?? m[10] ?? m[11];
+      const n=el(tag); inline(n,inner,warn,depth+1,resolveImage); host.append(n);
     } else host.append(el('br'));
     last=m.index+m[0].length;
   }
@@ -175,6 +177,10 @@ function indexDOM(root) {
     const n=t.n.cloneNode(false);
     if(n.tagName==='LI' && from>t.a) n.classList.add('fp-li-cont');
     for(const c of t.children||[]) {const part=cut(c,from,to); if(part) n.append(part);else if(n.tagName==='TR') n.append(c.n.cloneNode(false));}
+    if(n.tagName==='TABLE' && !n.querySelector('thead') && n.querySelector('tbody')) {
+      const head=(t.children||[]).find(c=>c.n.tagName==='THEAD');
+      if(head) { const clone=head.n.cloneNode(true); clone.dataset.repeatedHead='1'; n.prepend(clone); }
+    }
     return n;
   }
   return {size:pos,preferred:preferred.sort((a,b)=>a-b),slice:(a,b)=>cut(tree,a,b),textAt:function at(k,t=tree){if(k<t.a||k>=t.b) return ''; if(t.n.nodeType===3) return t.n.data[k-t.a];for(const c of t.children||[]) if(k>=c.a&&k<c.b)return at(k,c);return '';}};
