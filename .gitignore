@@ -1,5 +1,9 @@
 node_modules/
 .folio-data/
+presets/.deleted/
 .env*
 !*.example
 .DS_Store
+*.tmp
+cli-*-*/
+cards/
