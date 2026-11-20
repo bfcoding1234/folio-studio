@@ -1,6 +1,46 @@
 # 纸间 · 图文排版台
 
-为文字创作者设计的本地工作台：Markdown → 杂志式分页 → 试配图 → 导出小红书图片。
+为文字创作者做的本地排版工具。把一篇 Markdown 排成一套 **1080 × 1440（3:4）** 的杂志式图文：先看文字怎么分页，再把图试放进某个段落，满意后才采用。适合小红书长文、系列栏目和纯文字卡片，也可以用 CLI 直接出图。
+
+[看成品案例](#成品案例) · [第一次试用](#第一次试用) · [管理预设](#在网页管理预设) · [命令行导出](#命令行导出cli)
+
+## 成品案例
+
+以下是「纸间」用公开样稿实际导出的 PNG，不是效果示意图。点击缩略图可看原尺寸。
+
+**案例 A｜AI 产品经理面试题：如何设计 Agent 的上下文？** 采用 `ai-pm-indigo` 预设，共 4 页：插画封面、2 页正文和互动尾页。正文保留引用、列表与表格；尾页用本期追问来引导评论。
+
+<table>
+<tr><th>插画封面</th><th>正文</th><th>互动尾页</th></tr>
+<tr>
+<td><a href="docs/examples/agent-context/page-01.png"><img src="docs/examples/agent-context/page-01.png" width="230" alt="靛蓝预设封面：如何设计 Agent 的上下文？"></a></td>
+<td><a href="docs/examples/agent-context/page-02.png"><img src="docs/examples/agent-context/page-02.png" width="230" alt="靛蓝正文：段落、引用与列表"></a></td>
+<td><a href="docs/examples/agent-context/page-04.png"><img src="docs/examples/agent-context/page-04.png" width="230" alt="互动尾页：本期追问、收藏、点赞和关注"></a></td>
+</tr>
+</table>
+
+[打开 Markdown 样稿](examples/agent-context.md) · [查看正文续页](docs/examples/agent-context/page-03.png)
+
+**案例 B｜每周复盘，最后只留下三个决定。** 采用内置 `text` 预设，共 2 页，不加封面或尾页，适合拿来即排的文字稿。
+
+<a href="docs/examples/weekly-review/page-01.png"><img src="docs/examples/weekly-review/page-01.png" width="230" alt="纯文字复盘稿：标题、引用与清单"></a>
+<a href="docs/examples/weekly-review/page-02.png"><img src="docs/examples/weekly-review/page-02.png" width="230" alt="纯文字复盘稿续页：三项决定和验收表格"></a>
+
+[打开复盘 Markdown 样稿](docs/examples/weekly-review.md) · [查看栏目设置](docs/examples/weekly-review-layout.json)
+
+<details>
+<summary>复现这两套成品的命令</summary>
+
+```sh
+npm run folio -- render examples/agent-context.md --preset ai-pm-indigo \
+  --cover-image public/assets/context.png --question '查不到这条延期记录，你会先问什么？' \
+  --out ./cards/agent-context
+
+npm run folio -- render docs/examples/weekly-review.md --preset text \
+  --settings docs/examples/weekly-review-layout.json --out ./cards/weekly-review
+```
+
+</details>
 
 ## 打开
 
@@ -25,11 +65,35 @@ FOLIO_LAN_HOST="$(ipconfig getifaddr en0)" node lan.cjs
 
 ## 第一次试用
 
-1. 保留默认样稿，在右侧正文点「一位用户问……」那段，进入「试配图」。也可以左侧导入自己的 `.md`，点击「生成预览」。
-2. 选中素材库的帆布鞋，切换段旁小图、段中横图或独立主图页。用「原版 / 试排」比较首尾分页和整篇页数。
-3. 只有点「采用到文章」才会改变成稿；「暂不用」只关闭试排。候选图和上传图会保存在素材库，不用重画。
-4. 需要直接写进 Markdown 的图片，可用「插入图片」或将本地图片拖入编辑区。工具把它存到本机，并插入标准 Markdown 图片引用。为了让预览与导出一致，不会抓取任意外链；请上传外部图片后插入。
-5. 「本篇」选择排版预设，需要时再填本期题目、追问和封面图。标题留空从 Markdown 一级标题提取。默认是暖白砖红风、32 px 正文。整篇可以切到总览，也可以下载一页 PNG 或下载全篇 ZIP（批量上限 60 页）。
+用上面的《如何设计 Agent 的上下文？》样稿走一遍。没有生图密钥也能完成所有步骤。
+
+![纸间工作台实拍：左侧编辑 Markdown 和本篇信息，右侧查看分页成品](docs/screenshots/01-editor-preview.png)
+
+*上图使用工作台自带的公开样稿。左栏是原稿和本篇设置；右栏是分页预览、页面缩略图和导出入口。*
+
+### 1. 导入原稿，先出文字预览
+
+在左侧点击 **导入 MD**，选择 [样稿](examples/agent-context.md)，或者直接把 Markdown 粘贴到编辑区。在 **本篇预设** 选 `ai-pm-indigo`，标题留空，点击 **生成预览**。右侧会按实际版心分页，封面默认取原稿第一个一级标题。
+
+### 2. 设置本篇封面和追问
+
+展开左侧 **封面与结尾**，点 **上传本篇封面**，选择 [示例插画](public/assets/context.png)；也可以填写一句本期追问，例如「查不到这条延期记录，你会先问什么？」。再点 **生成预览**，用预览区下方的 **封面**、**尾页** 快速检查。只想输出正文时，把预设换成 `Text`。
+
+![封面设置实拍：左侧设置本篇封面图和结尾追问，右侧预览靛蓝预设的封面](docs/screenshots/02-cover-settings.png)
+
+### 3. 点正文段落，试配图再采用
+
+在右侧正文点「一位用户问……」开头的段落，从 **素材库** 选帆布鞋，也可以上传自己的图。切换 **段旁小图**、**段中横图** 或 **独立主图页**，用 **原版 / 试排** 对比排版和页数。满意后点 **采用到文章**；不满意点 **暂不用**。采用后，图跟着原稿段落走，不会固定在第几页。
+
+![试配图实拍：上方切换原版和试排，右侧选择摆放方式并确认采用](docs/screenshots/03-image-trial.png)
+
+> 如果图片本来就是 Markdown 的一部分，用左侧 **插入图片** 或把本地图片拖到编辑区。工具会保存图片并写入 Markdown 引用；不会自动抓取任意外链。
+
+### 4. 总览确认，导出成品
+
+点 **总览** 检查封面、正文和尾页的顺序。要单张，在单页预览点 **下载本页**；要整套，点右上角 **导出全篇**，得到按顺序编号的 PNG 压缩包（单次最多 60 页）。如果还停在试排，先采用，或切回 **原版** 再导出。
+
+![总览实拍：已采用的配图出现在正文缩略图中，右上角可导出全篇](docs/screenshots/04-export-overview.png)
 
 项目会保存在本目录的 `.folio-data/`，包括一份原稿、栏目设置、段落配图和素材。这个版本是**单项目本地工具**。导入新稿会替换当前稿正文，并重置本篇标题、追问、本篇封面图与配图关联，当前预设与素材库会保留。需要长期归档多篇项目，可以停服务后备份整个数据目录，或用 `FOLIO_DATA_DIR=/自选目录 npm start` 切换项目。配图跟随内容未变的原段落移动；大幅编辑原段落后工具会提醒重新关联，不会自动错挂到其他段落。
 
@@ -39,7 +103,9 @@ FOLIO_LAN_HOST="$(ipconfig getifaddr en0)" node lan.cjs
 
 ## 在网页管理预设
 
-打开设置弹窗的「预设管理」标签，可新建、编辑自定义预设，或将现有预设另存为新预设。预设可复用字体、字号、配色、栏目名、右上页眉、生图风格、封面和尾页开关、固定封面图、默认追问及互动文案。只有内置 Text（CLI 名称 `text`）只读，可以另存。自定义预设可删除，需确认；删除只从可选列表移除，备份保存在预设目录的 `.deleted/` 中，不影响已保存的稿件快照。
+点击工作台右上角的 **预设管理**。在 **编辑或克隆** 中选一个预设：要新建就填入新名称并点 **另存为预设**；要修改现有自定义预设，就点 **更新预设**。内置 Text（CLI 名称 `text`）只读，可另存一份再改。
+
+预设适合存重复使用的字体、字号、配色、栏目名、右上页眉、生图风格、封尾开关、固定封面图和默认互动文案。标题、本期追问及本篇配图则在原稿旁填写。自定义预设可删除，删除前需确认；备份保存在预设目录的 `.deleted/` 中，不影响已保存的稿件快照。
 
 在左侧 Markdown 原稿上方选择「本篇预设」，再点「生成预览」，一次应用本篇信息和正文。更新预设不会重排已保存的稿件；如需应用新版，可点「重新套用」。标题、追问、封面图和段落插图是本篇自己的内容，不会被覆盖。封面图和追问在「封面与结尾」里，没有本篇封面图时才使用预设固定图；两处都不设图就是文字封面。本篇追问留空时使用预设默认追问。「仅本篇调整」可以临时覆盖排版规则，不会反写预设。
 
