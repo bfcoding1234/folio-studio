@@ -21,5 +21,35 @@ test('studio: Markdown, trial/original, adoption, export, settings and reload', 
  const dl=p.waitForEvent('download');await get('#export-page').click();const download=await dl;const {width,height}=await sharp(await download.path()).metadata();assert.deepEqual([width,height],[1080,1440]);
  await get('#article-overrides summary').click();await get('#bodySize').fill('36');await get('#theme').selectOption('blue');await get('#refresh').click();await p.waitForFunction(()=>!document.querySelector('#refresh').disabled&&document.querySelector('#save-state').textContent==='已保存到本机');await p.reload();await p.waitForSelector('#stage .folio-page[data-kind=body]');assert.equal(await get('#bodySize').inputValue(),'36');assert.equal(await get('#theme').inputValue(),'blue');
  assert.deepEqual(errors,[]);
- }finally{await browser?.close();await new Promise(r=>server.close(r));}
+ }finally{await browser?.close();await new Promise(r=>server.close(r));await fs.rm(dataDir,{recursive:true,force:true});}
+});
+
+test('article settings auto-persist before preview and MD import resets article-only fields', {timeout:45000}, async()=>{
+ const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'folio-studio-draft-'));
+ const mdFile=path.join(dataDir,'fresh.md');
+ await fs.writeFile(mdFile,'# 全新文章标题\n\n这是导入后的正文内容。');
+ const server=await start({port:0,dataDir,env:{}});const origin=`http://127.0.0.1:${server.address().port}`;
+ let browser;try{
+  browser=await chromium.launch({executablePath:process.env.FOLIO_CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+  const p=await browser.newPage({viewport:{width:1360,height:920}});
+  const get=s=>p.locator(s);
+  await p.goto(origin);await p.waitForSelector('#stage .folio-page[data-kind=body]');
+  // Edit article title without clicking refresh; verify it persists across reload.
+  await get('#title').fill('未点预览也应保存的标题');
+  await get('#article-extras summary').click();
+  await get('#question').fill('未点预览也应保存的追问？');
+  assert.equal(await get('#export-all').isDisabled(),true);
+  await p.waitForFunction(()=>document.querySelector('#save-state').textContent==='已保存到本机');
+  await p.reload();await p.waitForSelector('#stage .folio-page[data-kind=body]');
+  assert.equal(await get('#title').inputValue(),'未点预览也应保存的标题');
+  await get('#article-extras summary').click();
+  assert.equal(await get('#question').inputValue(),'未点预览也应保存的追问？');
+  // Import a new Markdown file and verify previous article-only fields are cleared.
+  p.once('dialog',d=>d.accept());
+  await get('#md-file').setInputFiles(mdFile);
+  await p.waitForFunction(()=>document.querySelector('#title').value===''&&document.querySelector('#save-state').textContent==='已保存到本机');
+  await get('#jump-cover').click();
+  assert.equal(await get('#stage .fp-cover-title').textContent(),'全新文章标题');
+  assert.equal(await get('#stage .fp-cover-art').count(),0);
+ }finally{await browser?.close();await new Promise(r=>server.close(r));await fs.rm(dataDir,{recursive:true,force:true});}
 });
