@@ -1,0 +1,75 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>纸间 · 图文排版台</title><link rel="stylesheet" href="/studio.css"><link rel="stylesheet" href="/pages.css"><script src="/studio.js" type="module"></script></head>
+<body><header class="top"><div class="brand"><span aria-hidden="true" class="brand-mark">纸</span><div><strong>纸间</strong><span>图文排版台</span></div></div><span class="local"><i></i> 本地工作台</span><span id="save-state" class="save" role="status">正在读取…</span><button id="open-settings" data-testid="open-settings">预设管理</button><button class="primary" id="export-all" disabled>导出全篇 <span aria-hidden="true">↓</span></button></header>
+<main class="workspace"><section class="editor" aria-labelledby="editor-title"><div class="zone-title"><div class="tag">01 / WRITE</div><h1 id="editor-title">Markdown 原稿</h1><p>按你平时的方式写，不用提前拆页。</p></div>
+  <section class="article-settings" id="settings-fields" aria-label="本篇信息">
+    <div class="article-preset">
+      <label for="preset-select">本篇预设</label>
+      <div class="preset-row"><select id="preset-select" data-testid="preset-select" aria-describedby="article-preset-status" disabled><option value="">选择预设…</option></select><button type="button" id="preset-apply" data-testid="preset-apply" disabled title="重新套用所选预设">重新套用</button></div>
+      <p id="article-preset-status" class="small preset-hint" role="status"></p>
+    </div>
+    <div class="fields article-title"><label class="wide">文章 / 封面标题<input id="title" data-testid="title" data-setting="title" maxlength="55" placeholder="留空取 Markdown 一级标题"></label></div>
+    <details id="article-extras" class="article-overrides"><summary>封面与结尾</summary>
+      <div class="fields"><label class="wide">结尾追问<input id="question" data-testid="question" data-setting="question" maxlength="100" placeholder="留空使用预设默认追问" aria-describedby="article-question-hint"><span id="article-question-hint" class="field-hint"></span></label></div>
+      <div class="cover-label">本篇封面图</div>
+      <div class="settings-cover"><img id="cover-preview" alt="本篇有效封面图" hidden><div><p id="cover-status" data-testid="cover-status" class="small" role="status"></p>
+        <div class="source-tools"><button type="button" id="cover-pick">上传本篇封面</button><button type="button" id="cover-clear" data-testid="cover-clear">移除本篇封面</button><input type="file" id="cover-file" data-testid="cover-file" accept="image/png,image/jpeg,image/webp" hidden></div>
+      </div></div>
+    </details>
+    <details id="article-overrides" data-testid="article-overrides" class="article-overrides"><summary>仅本篇调整</summary><p class="small preset-hint">你可以在这里微调本篇。再次套用预设会替换这些样式，但不会改动以上本篇信息。</p><div id="article-style-fields"></div></details>
+  </section>
+<div class="edit-tools"><button id="import-md">导入 MD</button><button id="insert-img">插入图片</button><button id="insert-break">插入分页</button><input type="file" id="md-file" accept=".md,.markdown,.txt,text/plain,text/markdown" hidden><input type="file" id="md-image" accept="image/png,image/jpeg,image/webp" hidden></div><label for="md" class="sr">Markdown 原稿</label><textarea id="md" spellcheck="false" placeholder="在这里写下你的文章…"></textarea><div class="editor-bottom"><span id="char-count"></span><button id="refresh" class="primary" disabled>生成预览 <span aria-hidden="true">→</span></button></div></section>
+<section class="preview" aria-labelledby="preview-title"><div class="preview-head"><div class="zone-title"><div class="tag">02 / PREVIEW</div><h2 id="preview-title">成品预览 <span class="badge" id="page-count">—</span></h2><p id="preview-hint">先看文字，点正文段落试配图。</p></div><div class="preview-tools"><div class="seg" aria-label="预览模式"><button id="view-page" aria-pressed="true">单页</button><button id="view-grid" aria-pressed="false">总览</button></div><button id="zoom-page" aria-pressed="false">放大</button><button id="export-page" disabled>下载本页</button></div></div><div class="preview-message" id="warnings" hidden></div><div id="trial-banner" class="trial-banner" hidden><div class="seg"><button id="trial-original">原版</button><button id="trial-view">试排</button></div><span id="trial-delta"></span></div><div class="preview-main"><nav id="rail" class="rail" aria-label="页面缩略图"></nav><div id="stage" class="stage" tabindex="-1"><div class="empty">正在生成预览…</div></div><aside id="inspector" class="inspector" hidden aria-labelledby="trial-title"><div class="panel-head"><h3 id="trial-title">试配图</h3><button id="close-trial" aria-label="关闭试配图">×</button></div><p class="small">图片跟着原稿段落移动，不绑定页码。</p><blockquote id="anchor-text"></blockquote><button id="jump-source">定位原文</button><div id="candidate-preview" hidden><img id="candidate-img" alt="候选配图"></div><div class="source-tools"><button id="upload-trial">上传图片</button><button id="show-library">素材库</button><input id="trial-file" type="file" accept="image/png,image/jpeg,image/webp" hidden></div><div id="library" hidden><h4>本篇素材</h4><div id="library-items"></div></div><details id="ai-details"><summary>让 AI 画一张</summary><label>画面要求<textarea id="image-prompt" maxlength="2000" rows="3" placeholder="例如：一双帆布鞋和一张退货小票，只画主体。"></textarea></label><p id="ai-status" class="small"></p><button id="generate-image">生成候选图</button></details><div id="layout-controls" hidden><label>摆放方式<select id="placement-layout"><option value="spot">段旁小图</option><option value="inline">段中横图</option><option value="hero">独立主图页</option></select></label><label>图注（可选）<input id="placement-caption" maxlength="180" placeholder="留空时不显示"></label><div class="panel-actions"><button id="adopt" class="primary">采用到文章</button><button id="discard">暂不用</button></div></div><button id="remove-placement" hidden>从排版移除已采用的图</button><p id="trial-status" role="status" class="small"></p></aside></div><div class="preview-bottom"><span class="preview-format">1080 × 1440 · 3:4</span><nav class="page-turn" aria-label="预览分页"><button type="button" id="jump-cover" disabled>封面</button><button type="button" id="prev-page" aria-label="上一页" disabled>←</button><span id="turn-indicator">—</span><button type="button" id="next-page" aria-label="下一页" disabled>→</button><button type="button" id="jump-ending" disabled>尾页</button></nav><span id="current-kind"></span></div></section></main>
+<dialog id="settings" aria-labelledby="settings-title">
+  <div class="settings-top">
+    <div class="settings-head"><div><div class="tag">STYLE / EDITION</div><h2 id="settings-title">预设管理</h2><p>管理可重复使用的版式；修改不会自动影响本篇。</p></div><button type="button" id="settings-close" aria-label="关闭预设管理">×</button></div>
+  </div>
+  <section class="settings-body" id="preset-manager" aria-label="预设编辑">
+    <fieldset class="preset-panel"><legend>管理预设</legend>
+      <label for="preset-manage-select">编辑或克隆</label>
+      <div class="preset-row"><select id="preset-manage-select" data-testid="preset-manage-select" aria-describedby="preset-status" disabled><option value="">新预设草稿</option></select><button type="button" id="preset-new" data-testid="preset-new" disabled>新建</button></div>
+      <div class="preset-feedback"><button type="button" id="preset-reload">重新读取</button></div>
+      <div id="preset-warnings" class="small" hidden></div>
+    </fieldset>
+    <div id="preset-editor" hidden>
+      <div id="preset-style-fields"></div>
+      <fieldset><legend>默认追问</legend><div class="fields"><label class="wide">结尾追问<input id="preset-edit-question" data-testid="preset-edit-question" maxlength="100" aria-describedby="preset-question-hint"><span id="preset-question-hint" class="field-hint">本篇未填写追问时使用；启用互动结尾的预设需要填写。</span></label></div></fieldset>
+      <fieldset><legend>固定封面</legend>
+        <div class="settings-cover"><img id="preset-cover-preview" alt="预设固定封面" hidden><div><p id="preset-cover-status" data-testid="preset-cover-status" class="small" role="status"></p>
+          <div class="source-tools"><button type="button" id="preset-cover-pick">上传固定封面</button><button type="button" id="preset-cover-clear" data-testid="preset-cover-clear">清除固定封面</button><input type="file" id="preset-cover-file" data-testid="preset-cover-file" accept="image/png,image/jpeg,image/webp" hidden></div>
+        </div></div>
+        <p class="small preset-hint">固定图可供多篇文章复用；每篇仍可上传自己的封面图来替换它。</p>
+      </fieldset>
+      <fieldset id="preset-save-as"><legend>另存为预设</legend>
+        <label for="preset-name">新预设名称</label>
+        <div class="preset-row"><input id="preset-name" data-testid="preset-name" placeholder="例如 ai-pm-indigo" required maxlength="64" pattern="[a-z0-9][a-z0-9_\-]{0,63}" aria-describedby="preset-name-hint"><button type="button" id="preset-create" data-testid="preset-create" disabled>另存为预设</button></div>
+        <p id="preset-name-hint" class="small preset-hint">小写字母或数字开头，可用短横线和下划线。另存当前预设编辑区的内容，不读取本篇。</p>
+      </fieldset>
+    </div>
+  </section>
+  <div class="settings-bottom" id="preset-settings-footer"><p class="small" id="preset-status" role="status"></p><div class="preset-footer-actions"><button type="button" class="danger" id="preset-delete" data-testid="preset-delete" hidden disabled>删除预设</button><button type="button" class="primary" id="preset-update" data-testid="preset-update" disabled>更新预设</button></div></div>
+</dialog>
+<template id="style-fields-template">
+  <fieldset><legend>栏目与版式</legend><div class="fields">
+    <label>栏目名<input data-style="column" maxlength="40"></label>
+    <label>右上页眉<input data-style="headerRight" maxlength="30" placeholder="选填，留空不显示"></label>
+    <label>色系<select data-style="theme"><option value="clay">暖白 · 砖红</option><option value="blue">纸白 · 靛蓝</option><option value="sage">米白 · 墨绿</option></select></label>
+    <label>生图风格<select data-style="imageStyle"><option value="ink">去底线描</option><option value="collage">纸张拼贴</option><option value="photo">编辑摄影</option><option value="diagram">简洁图解</option></select></label>
+    <label>正文字号（px）<input type="number" data-style="bodySize" min="24" max="52" step="any"></label>
+    <label>正文行高倍数<input type="number" data-style="lineHeight" min="1.25" max="2" step="any"></label>
+    <label>正文风格<select data-style="bodyFont"><option value="sans">黑体</option><option value="serif">宋体</option></select></label>
+    <label>标题风格<select data-style="titleFont"><option value="serif">宋体</option><option value="sans">黑体</option></select></label>
+  </div></fieldset>
+  <fieldset><legend>封面与互动结尾</legend>
+    <div class="checks"><label><input type="checkbox" data-style="cover"> 启用封面</label><label><input type="checkbox" data-style="ending"> 启用互动结尾</label></div>
+    <div class="ending-vote" hidden><div class="checks"><label><input type="checkbox" data-style="endingVote" disabled> 添加投票引导</label></div><p class="small">只在尾页显示引导文字，实际投票需在发布时添加。</p></div>
+    <div class="fields">
+      <label>互动页眉<input data-style="endingLabel" maxlength="55"></label>
+      <label>评论邀请<input data-style="endingInvite" maxlength="100"></label>
+      <label>互动页落款<input data-style="endingSign" maxlength="55"></label>
+      <label>收藏说明<input data-note="0" maxlength="40"></label>
+      <label>点赞说明<input data-note="1" maxlength="40"></label>
+      <label>关注说明<input data-note="2" maxlength="40"></label>
+    </div>
+  </fieldset>
+</template>
+<div id="toast" role="status" aria-live="polite" hidden></div></body></html>

@@ -1,0 +1,23 @@
+{
+  "column": "AI 产品经理面试题",
+  "theme": "blue",
+  "bodyFont": "sans",
+  "titleFont": "serif",
+  "bodySize": 32,
+  "lineHeight": 1.5,
+  "cover": true,
+  "ending": true,
+  "endingVote": false,
+  "endingLabel": "欢迎评论",
+  "question": "这个问题，你会怎么回答？",
+  "endingInvite": "",
+  "endingActionNotes": [
+    "面试前，回来再答一次。",
+    "觉得有用，点个赞。",
+    "得到最及时的消息"
+  ],
+  "endingSign": "",
+  "imageStyle": "ink",
+  "coverImage": "",
+  "headerRight": "@AI产品经理点点"
+}

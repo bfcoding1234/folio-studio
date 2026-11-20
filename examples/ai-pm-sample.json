@@ -1,0 +1,8 @@
+{
+  "headerRight": "第 01 题",
+  "title": "如何设计 Agent 的上下文？",
+  "coverImage": "/assets/context.png",
+  "ending": true,
+  "endingVote": false,
+  "question": "用户说客服答应过延期，但你查不到这条记录。你会先问什么？"
+}
