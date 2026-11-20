@@ -2,12 +2,10 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
-const { fail, safeRead, atomicWrite } = require('./common.cjs');
+const { fail, safeRead, atomicWrite, ASSET_PATH_RE: COVER_ASSET, MEDIA_PATH_RE: COVER_MEDIA } = require('./common.cjs');
 const LIMIT = 32 * 1024;
 const STYLE_KEYS = ['column','headerRight','theme','bodyFont','titleFont','bodySize','lineHeight','imageStyle','cover','ending','endingVote'];
 const DEFAULT_KEYS = ['question','coverImage','endingLabel','endingInvite','endingSign','endingActionNotes'];
-const COVER_ASSET = /^\/assets\/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:png|jpe?g|webp)$/i;
-const COVER_MEDIA = /^\/media\/[a-f0-9]{64}\.webp$/;
 const localCover = s=>s===''||COVER_ASSET.test(s)||COVER_MEDIA.test(s);
 const EDITABLE_KEYS = new Set([...STYLE_KEYS,...DEFAULT_KEYS]);
 // Accept legacy file keys so older CLI presets still load; subtitle/endQuote are no longer rendered.

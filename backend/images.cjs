@@ -40,6 +40,9 @@ async function generateImage(body, mediaDir, env) {
   for (const [key, max] of [['prompt', 4000], ['style', 240], ['layout', 240], ['text', 6000]]) {
     if ((key === 'prompt' || body[key] != null) && (typeof body[key] !== 'string' || body[key].length > max)) fail(400, `字段 ${key} 格式或长度不正确。`);
   }
+  if (body.background != null && !['auto', 'transparent', 'opaque'].includes(body.background)) {
+    fail(400, '字段 background 仅支持 auto、transparent 或 opaque。');
+  }
   if (!body.prompt.trim()) fail(400, '请填写生图提示词。');
   const prompt = ['为中文图文作品绘制配图，不要添加水印或额外文字。', body.prompt, body.style && `画风：${body.style}`, body.layout && `构图：${body.layout}`, body.text && `文章语境：${body.text}`].filter(Boolean).join('\n');
   const endpoint = imageEndpoint(env);
@@ -48,7 +51,10 @@ async function generateImage(body, mediaDir, env) {
   const gptImage = /^gpt-image-/.test(model);
   // Keep custom providers on a basic square request; only GPT Image gets its shape/alpha options.
   const size = gptImage && body.layout === 'inline' ? '1536x1024' : gptImage && body.layout === 'hero' ? '1024x1536' : '1024x1024';
-  const transparent = gptImage && /透明背景|去底|transparent background/i.test(body.style || '');
+  const transparent = gptImage && (
+    body.background === 'transparent' ||
+    (body.background !== 'opaque' && /透明背景|去底|transparent background/i.test(body.style || ''))
+  );
   let result;
   try {
     const response = await fetch(endpoint, {

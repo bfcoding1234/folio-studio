@@ -1,8 +1,12 @@
 'use strict';
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const MiB = 1024 * 1024;
+const ASSET_PATH_RE = /^\/assets\/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:png|jpe?g|webp)$/i;
+const MEDIA_PATH_RE = /^\/media\/[a-f0-9]{64}\.webp$/;
+const isLocalImagePath = s => typeof s === 'string' && (ASSET_PATH_RE.test(s) || MEDIA_PATH_RE.test(s));
+const sha256Hex = data => createHash('sha256').update(data).digest('hex');
 function fail(status, message) { const error = new Error(message); error.httpStatus = status; throw error; }
 
 async function readLimited(stream, max) {
@@ -51,4 +55,4 @@ async function safeRead(root, relative, max) {
     return await file.readFile();
   } finally { await file.close(); }
 }
-module.exports = { MiB, fail, readLimited, readJSON, decodeBase64, atomicWrite, safeRead };
+module.exports = { MiB, ASSET_PATH_RE, MEDIA_PATH_RE, isLocalImagePath, sha256Hex, fail, readLimited, readJSON, decodeBase64, atomicWrite, safeRead };

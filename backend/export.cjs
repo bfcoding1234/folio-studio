@@ -2,11 +2,10 @@
 const { parseDocument } = require('htmlparser2');
 const { chromium } = require('playwright');
 const fs = require('node:fs');
-const { fail, MiB, safeRead } = require('./common.cjs');
+const { fail, MiB, safeRead, isLocalImagePath } = require('./common.cjs');
 const WIDTH = 1080, HEIGHT = 1440, MAX_PAGES = 60;
 const tags = new Set('article div span header footer section main aside h1 h2 h3 h4 h5 h6 p blockquote pre code ol ul li table thead tbody tr th td a strong b em i del br hr img figure figcaption small mark sup sub'.split(' '));
 const voidTags = new Set(['br', 'hr', 'img']);
-const rasterPath = /^(?:\/media\/[0-9a-f]{64}\.webp|\/assets\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:png|jpe?g|webp))$/i;
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const exportOrigin = 'https://folio-export.invalid'; // Synthetic origin; Chromium never contacts a server.
 function sanitizePage(html, images) {
@@ -25,7 +24,7 @@ function sanitizePage(html, images) {
       if (k === 'class' && /^[a-zA-Z0-9_\-\s]{0,512}$/.test(v)) attrs.push([k,v]);
       else if (/^data-[a-z0-9-]{1,40}$/.test(k) && v.length <= 128) attrs.push([k,v]);
       else if (n.name === 'img' && k === 'src') {
-        if (!rasterPath.test(v)) fail(400, '导出只允许 /assets/ 或 /media/ 下的本地栅格图片。');
+        if (!isLocalImagePath(v)) fail(400, '导出只允许 /assets/ 或 /media/ 下的本地栅格图片。');
         images.add(v); attrs.push([k,v]);
       } else if (n.name === 'img' && k === 'alt') attrs.push([k,v.slice(0,1000)]);
       else if ((n.name === 'ol' && k === 'start' || n.name === 'li' && k === 'value') && /^\d{1,8}$/.test(v)) attrs.push([k,v]);
@@ -70,7 +69,7 @@ async function launchBrowser(env) {
   }
   fail(503, '无法启动沙箱 Chrome。请安装 Chrome 或执行 npx playwright install chromium，或设置 FOLIO_CHROME_PATH。');
 }
-async function renderExport(body, {publicDir, mediaDir, env}) {
+async function renderExport(body, {publicDir, mediaDir, env, browser: sharedBrowser}) {
   const {html, index, title} = body;
   if (!Array.isArray(html) || !html.length || html.length > MAX_PAGES || typeof title !== 'string' || title.length > 500) fail(400, `需要标题和 1–${MAX_PAGES} 页 HTML。`);
   if (index !== undefined && (!Number.isInteger(index) || index < 0 || index >= html.length)) fail(400, '导出页码不在范围内（index 从 0 开始）。');
@@ -83,10 +82,12 @@ async function renderExport(body, {publicDir, mediaDir, env}) {
     if ((imageBytes += buf.length) > 64*MiB) fail(413, '页面图片总大小超过 64 MiB。');
     resources.set(src, {body:buf, contentType: /\.png$/i.test(src) ? 'image/png' : /\.webp$/i.test(src) ? 'image/webp' : 'image/jpeg'});
   }
-  const browser = await launchBrowser(env);
-  const watchdog = setTimeout(() => browser.close().catch(()=>{}), 120000); watchdog.unref();
+  const ownsBrowser = !sharedBrowser;
+  const browser = sharedBrowser || await launchBrowser(env);
+  const watchdog = setTimeout(() => { if (ownsBrowser) browser.close().catch(()=>{}); }, 120000); watchdog.unref();
+  let ctx;
   try {
-    const ctx = await browser.newContext({viewport:{width:WIDTH,height:HEIGHT},deviceScaleFactor:1,javaScriptEnabled:false,serviceWorkers:'block',acceptDownloads:false,bypassCSP:false});
+    ctx = await browser.newContext({viewport:{width:WIDTH,height:HEIGHT},deviceScaleFactor:1,javaScriptEnabled:false,serviceWorkers:'block',acceptDownloads:false,bypassCSP:false});
     let markup;
     const csp = "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'";
     await ctx.route('**/*', async route=>{
@@ -109,6 +110,10 @@ async function renderExport(body, {publicDir, mediaDir, env}) {
     }
     const ext=index===undefined?'zip':'png'; const stem=Array.from(title.normalize('NFC').replace(/[^\p{L}\p{N}\s_-]/gu,'').trim()).slice(0,60).join('')||'Folio';
     return { bytes:ext==='zip'?zip(entries):entries[0][1], entries, type:ext==='zip'?'application/zip':'image/png',filename:`${stem}${ext==='png'?'-'+String(index+1).padStart(2,'0'):''}.${ext}`, ext };
-  } finally { clearTimeout(watchdog); await browser.close().catch(()=>{}); }
+  } finally {
+    clearTimeout(watchdog);
+    if (ctx) await ctx.close().catch(()=>{});
+    if (ownsBrowser) await browser.close().catch(()=>{});
+  }
 }
 module.exports = { MAX_PAGES, sanitizePage, renderExport, launchBrowser, zip };

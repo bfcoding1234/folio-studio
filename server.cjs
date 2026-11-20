@@ -3,7 +3,7 @@
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs/promises');
-const { MiB, fail, readJSON, atomicWrite, safeRead } = require('./backend/common.cjs');
+const { MiB, MEDIA_PATH_RE, sha256Hex, fail, readJSON, atomicWrite, safeRead } = require('./backend/common.cjs');
 const { uploadImage, generateImage, MAX_IMAGE } = require('./backend/images.cjs');
 const { renderExport, MAX_PAGES } = require('./backend/export.cjs');
 const { createStore } = require('./backend/presets.cjs');
@@ -13,17 +13,24 @@ const TYPES = {
   '.woff2':'font/woff2','.woff':'font/woff','.ttf':'font/ttf','.txt':'text/plain; charset=utf-8','.md':'text/plain; charset=utf-8','.json':'application/json; charset=utf-8'
 };
 const publicDirDefault=path.join(__dirname,'public');
-function sendJSON(res,status,value) {
+function sendJSON(res,status,value,extraHeaders={}) {
   const bytes=Buffer.from(JSON.stringify(value));
-  res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Content-Length':bytes.length,'Cache-Control':'no-store'});
+  res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Content-Length':bytes.length,'Cache-Control':'no-store',...extraHeaders});
   res.end(bytes);
 }
+const normalizeTag = raw => typeof raw === 'string' ? raw.trim().replace(/^W\//i,'').replace(/^"|"$/g,'') : '';
 async function start({env=process.env, port=Number(env.PORT ?? 5267), publicDir=publicDirDefault, dataDir=path.resolve(env.FOLIO_DATA_DIR || path.join(__dirname,'.folio-data'))}={}) {
   if (!Number.isInteger(port) || port<0 || port>65535) throw new Error('PORT 必须是 0–65535 之间的整数。');
   const mediaDir=path.join(dataDir,'media'), projectFile=path.join(dataDir,'project.json');
   await fs.mkdir(mediaDir,{recursive:true,mode:0o700});
   const busy={generate:0,upload:0,export:0};
   const presets=createStore(env,{publicDir,mediaDir});
+  let projectWrite=Promise.resolve();
+  const queueProjectWrite=fn=>{const job=projectWrite.then(fn);projectWrite=job.catch(()=>{});return job;};
+  async function readProjectBytes(){
+    try { return await fs.readFile(projectFile); }
+    catch(e) { if(e.code==='ENOENT') return null; throw e; }
+  }
   const server=http.createServer({maxHeaderSize:16384,requestTimeout:40000,headersTimeout:15000},async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Referrer-Policy','no-referrer');
@@ -54,13 +61,25 @@ async function start({env=process.env, port=Number(env.PORT ?? 5267), publicDir=
           return sendJSON(res,200,{preset:await presets.save(presetPath[1],settings,revision,false)});
         }
         if (pathname==='/api/project' && req.method==='GET') {
-          let bytes;
-          try {bytes=await fs.readFile(projectFile);} catch(e) { if(e.code==='ENOENT') return sendJSON(res,200,null);throw e; }
+          const bytes=await readProjectBytes();
+          if (bytes===null) return sendJSON(res,200,null,{'ETag':'"empty"'});
           // Validate persisted JSON; propagate corruption as an error, not an empty project.
-          return sendJSON(res,200,JSON.parse(bytes));
+          return sendJSON(res,200,JSON.parse(bytes),{'ETag':`"${sha256Hex(bytes)}"`});
         }
         if (pathname==='/api/project' && req.method==='PUT') {
-          const json=await readJSON(req,2*MiB); await atomicWrite(projectFile,JSON.stringify(json)); return sendJSON(res,200,{ok:true});
+          const json=await readJSON(req,2*MiB);
+          const ifMatch=normalizeTag(req.headers['if-match']);
+          const revision=await queueProjectWrite(async()=>{
+            if (ifMatch) {
+              const current=await readProjectBytes();
+              const currentRev=current===null?'empty':sha256Hex(current);
+              if (ifMatch!==currentRev) fail(409,'稿件已在另一窗口或设备修改，请刷新后再保存，避免覆盖。');
+            }
+            const nextBytes=Buffer.from(JSON.stringify(json));
+            await atomicWrite(projectFile,nextBytes);
+            return sha256Hex(nextBytes);
+          });
+          return sendJSON(res,200,{ok:true,revision},{'ETag':`"${revision}"`});
         }
         const kind=pathname.slice(5);
         if (req.method==='POST' && Object.hasOwn(busy,kind)) {
@@ -81,7 +100,7 @@ async function start({env=process.env, port=Number(env.PORT ?? 5267), publicDir=
       const media=pathname.startsWith('/media/');
       const rel=media?pathname.slice(7):pathname==='/'?'index.html':pathname.slice(1);
       const type=TYPES[path.extname(rel).toLowerCase()];
-      if (!type || (media&&!/^[a-f0-9]{64}\.webp$/.test(rel))) fail(404,'资源不存在。');
+      if (!type || (media&&!MEDIA_PATH_RE.test('/media/'+rel))) fail(404,'资源不存在。');
       const bytes=await safeRead(media?mediaDir:publicDir,rel,24*MiB);
       const headers={'Content-Type':type,'Content-Length':bytes.length,'Cache-Control':media?'private, max-age=31536000, immutable':'no-cache'};
       if (type.startsWith('text/html')) headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
