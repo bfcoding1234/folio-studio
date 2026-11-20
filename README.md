@@ -53,6 +53,9 @@ FOLIO_LAN_HOST="$(ipconfig getifaddr en0)" node lan.cjs
 # 将独立 Markdown 排成 3:4 图片，不覆盖网页稿件
 npm run folio -- render ./article.md --preset ai-pm-indigo --out ./cards
 
+# 为本次导出指定封面图，标题仍从 Markdown 提取
+npm run folio -- render ./article.md --preset ai-pm-indigo --cover-image "./封面图.png" --out ./cards-with-cover
+
 # 读取网页里最近一次已保存的稿件（包括已采用的配图）
 npm run folio -- export --current --out ./current-cards
 
@@ -64,6 +67,8 @@ npm run folio -- --help
 **不指定预设时，CLI 使用 `ai-pm`（若存在）；否则用 Text，只出正文。** 想用带封面和尾页的版式时，可显式指定 `--preset ai-pm-indigo` 或另建一个预设。封面标题取稿件第一个一级标题（没有就用文件名）；不沿用示例文章的右上页眉、插画或案例。尾页默认用通用提问，可通过 `--question '你会先核实哪项信息？'` 换成本期问题，右上页眉由预设决定，内置预设默认留空，可用 `--header-right '第 02 题'` 临时覆盖。互动尾页的投票提示默认关闭，可用 `--vote` 开启，开启后放在互动区最后一行（不创建平台投票）。仅需正文时选 `--preset text`；也可以单独加 `--no-cover` 或 `--no-ending`。
 
 **预设用来复用整套样式。** `npm run folio -- presets` 可以列出内置和自定义预设。把一个 JSON 放进本项目 `presets/`（也可用 `FOLIO_PRESETS_DIR` 换目录），以后用 `--preset 文件名`（不带 `.json`），或直接 `--preset ./layout.json`。参考 [靛蓝栏目预设](<presets/ai-pm-indigo.json>)：可以配置字体、字号、色系、封尾开关、尾页问题、投票开关、评论提示和三条互动文案。预设中的相对封面图片路径以预设文件目录为根。`--settings ./layout.json` 可再覆盖当次设置，其相对封面图片路径仍以 Markdown 目录为根；`--title`、`--body-size` 等命令行参数最后生效。`export --current` 仍沿用网页已保存的设置，也可临时覆盖，但不另套预设。
+
+**`--cover-image FILE` 是 `render` 的可选参数。** 接受本地 PNG / JPEG / WebP（最大 10 MiB），相对路径从执行命令的目录解析，不是从 Markdown 所在目录解析。指定后会开启封面并覆盖本次的预设或设置封面图，不修改网页稿件或预设；不能与 `--no-cover` 一起使用。不传时仍按原有设置：封面开启时优先使用已有封面图，没有则用文字封面；封面关闭则不生成。
 
 Markdown 可只含文本，也可引用稿件所在目录及其子目录中的 PNG / JPEG / WebP，如 `![案例图](./images/example.png)`；不抓取外链。文件名有空格时，用 `%20` 编码。
 

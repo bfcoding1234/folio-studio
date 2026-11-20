@@ -10,16 +10,17 @@ const { MAX_PAGES, launchBrowser, renderExport } = require('./backend/export.cjs
 const { LIMIT, checkSettings, presetDirectory, customNames, isPresetName, readCustom } = require('./backend/presets.cjs');
 const publicDir = path.join(__dirname,'public');
 const origin = 'https://folio-cli.invalid';
-const opts={out:{type:'string'},preset:{type:'string'},settings:{type:'string'},title:{type:'string'},issue:{type:'string'},'header-right':{type:'string'},vote:{type:'boolean'},'no-vote':{type:'boolean'},question:{type:'string'},'no-ending':{type:'boolean'},'body-size':{type:'string'},'no-cover':{type:'boolean'},current:{type:'boolean'},json:{type:'boolean'},help:{type:'boolean',short:'h'}};
+const opts={out:{type:'string'},preset:{type:'string'},settings:{type:'string'},title:{type:'string'},'cover-image':{type:'string'},issue:{type:'string'},'header-right':{type:'string'},vote:{type:'boolean'},'no-vote':{type:'boolean'},question:{type:'string'},'no-ending':{type:'boolean'},'body-size':{type:'string'},'no-cover':{type:'boolean'},current:{type:'boolean'},json:{type:'boolean'},help:{type:'boolean',short:'h'}};
 const help=`纸间 CLI · 共用网页排版引擎
 
-  folio render <article.md> [--preset NAME] [--out ./cards]
+  folio render <article.md> [--preset NAME] [--title TEXT] [--cover-image FILE] [--out ./cards]
   folio export --current [--out ./cards]
   folio presets
 
   --preset NAME      text（仅正文）/ 自定义预设名或 JSON 路径（可用 folio presets 查看）
   --settings FILE    JSON 版式设置，覆盖预设或当前稿件的版式（不保存）
   --title TEXT       指定封面与页脚标题
+  --cover-image FILE 指定本地封面图（仅 render，PNG/JPEG/WebP）；开启封面，不可与 --no-cover 同用
   --body-size N      正文字号，24–52 px
   --header-right TEXT  右上页眉，默认留空（兼容旧参数 --issue）
   --question TEXT    覆盖本期追问并启用尾页
@@ -34,29 +35,54 @@ const help=`纸间 CLI · 共用网页排版引擎
 const contentTypes={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
 const imageType = s => contentTypes[path.extname(s).toLowerCase()];
 
-async function readFile(file,max){
+async function readLocalBytes(file,max){
   const real=await fs.realpath(file); const stat=await fs.stat(real);
   if(!stat.isFile()||stat.size>max) throw new Error(`文件非普通文件或超过大小限制：${file}`);
   const bytes=await fs.readFile(real);
   if(bytes.length>max) throw new Error(`文件超过大小限制：${file}`);
-  return bytes.toString('utf8').replace(/^\uFEFF/,'');
+  return bytes;
+}
+async function readFile(file,max){
+  return (await readLocalBytes(file,max)).toString('utf8').replace(/^\uFEFF/,'');
 }
 async function readObject(file,max){
   const data=JSON.parse(await readFile(file,max));
   if(!data||typeof data!=='object'||Array.isArray(data))throw new Error(`需要 JSON 对象：${file}`);
   return data;
 }
+async function importRaster(bytes, mime, mediaDir) {
+  return (await uploadImage({dataUrl:`data:${mime};base64,${bytes.toString('base64')}`},mediaDir)).src;
+}
+async function importCoverFile(raw, mediaDir) {
+  const file=path.resolve(raw);
+  const mime=imageType(file);
+  if(!mime)throw new Error('--cover-image 仅支持本地 PNG、JPEG 或 WebP 文件。');
+  try{return await importRaster(await readLocalBytes(file,MAX_IMAGE),mime,mediaDir);}
+  catch(e){throw new Error(`无法使用封面图 ${raw}：${e.code==='ENOENT'?'找不到文件。':e.message}`);}
+}
 async function importLocalImage(raw, articleDir, mediaDir) {
   let rel;try{rel=decodeURIComponent(raw).replace(/^\.\//,'');}catch{throw new Error(`图片路径编码无效：${raw}`);}
   const mime=imageType(rel);
   if(!mime||path.isAbsolute(rel)||/[\\:?#]/.test(rel)||rel.split('/').some(p=>!p||p.startsWith('.')))throw new Error(`仅允许稿件目录内的相对 PNG、JPEG 或 WebP 路径：${raw}`);
   let bytes;try{bytes=await safeRead(articleDir,rel,MAX_IMAGE);}catch(e){throw new Error(`无法读取稿件配图 ${raw}：${e.message}`);}
-  return (await uploadImage({dataUrl:`data:${mime};base64,${bytes.toString('base64')}`},mediaDir)).src;
+  return importRaster(bytes,mime,mediaDir);
 }
-async function paginate(project,{articleDir,mediaDir,coverDir,sharedMediaDir,browser:sharedBrowser}){
-  const ownsBrowser=!sharedBrowser;
-  const browser=sharedBrowser||await launchBrowser(process.env);
-  const watchdog=setTimeout(()=>{if(ownsBrowser)browser.close().catch(()=>{});},60000);watchdog.unref();
+async function prepareRenderCover(project,{coverFile,coverDir,mediaDir,sharedMediaDir}){
+  if(coverFile!==undefined){
+    project.settings.coverImage=await importCoverFile(coverFile,mediaDir);
+    project.settings.cover=true;
+    return;
+  }
+  const art=project.settings.coverImage;
+  if(!project.settings.cover||!art||assetPattern.test(art))return;
+  if(mediaPattern.test(art)){
+    const name=art.slice(7);
+    let bytes;try{bytes=await safeRead(sharedMediaDir,name,16*MiB);}catch{throw new Error('找不到预设封面图片。请核对 FOLIO_DATA_DIR 与网页是否一致，或在网页重新选择封面。');}
+    // Copy only the selected preset cover into the isolated rendering store.
+    await fs.writeFile(path.join(mediaDir,name),bytes,{flag:'wx',mode:0o600}).catch(e=>{if(e.code!=='EEXIST')throw e;});
+  }else project.settings.coverImage=await importLocalImage(art,coverDir,mediaDir);
+}
+async function paginate(project,{articleDir,mediaDir,browser}){
   let ctx;
   try{
     ctx=await browser.newContext({viewport:{width:1080,height:1440},serviceWorkers:'block'});
@@ -85,15 +111,6 @@ async function paginate(project,{articleDir,mediaDir,coverDir,sharedMediaDir,bro
         if(/^(?:[a-z][a-z\d+.-]*:|\/)/i.test(raw)){aliases[raw]=null;warnings.push(`未读取非稿件目录相对路径的配图：${raw}`);continue;}
         aliases[raw]=await importLocalImage(raw,articleDir,mediaDir);
       }
-      const art=project.settings.coverImage;
-      if(project.settings.cover&&art&&!assetPattern.test(art)){
-        if(mediaPattern.test(art)){
-          const name=art.slice(7);
-          let bytes;try{bytes=await safeRead(sharedMediaDir,name,16*MiB);}catch{throw new Error('找不到预设封面图片。请核对 FOLIO_DATA_DIR 与网页是否一致，或在网页重新选择封面。');}
-          // Copy only the selected preset cover into the isolated rendering store.
-          await fs.writeFile(path.join(mediaDir,name),bytes,{flag:'wx',mode:0o600}).catch(e=>{if(e.code!=='EEXIST')throw e;});
-        }else project.settings.coverImage=await importLocalImage(art,coverDir||articleDir,mediaDir);
-      }
     }
     const result=await page.evaluate(async ({project,aliases})=>{
       const {buildPages}=await import('/pages.js');
@@ -101,7 +118,7 @@ async function paginate(project,{articleDir,mediaDir,coverDir,sharedMediaDir,bro
       return {html:r.pages.map(p=>p.outerHTML),pageKinds:r.pages.map(p=>p.dataset.kind),title:r.title,warnings:r.warnings};
     },{project,aliases});
     return {...result,warnings:[...new Set([...warnings,...result.warnings])]};
-  }finally{clearTimeout(watchdog);if(ctx)await ctx.close().catch(()=>{});if(ownsBrowser)await browser.close().catch(()=>{});}
+  }finally{if(ctx)await ctx.close().catch(()=>{});}
 }
 async function main(args=process.argv.slice(2)){
   if(!args.length||['-h','--help','help'].includes(args[0])){console.log(help);return;}
@@ -119,6 +136,12 @@ async function main(args=process.argv.slice(2)){
   if(!['render','export'].includes(command))throw new Error(`未知命令 ${command}。运行 folio --help 查看用法。`);
   if(command==='render'&&(positionals.length!==1||values.current))throw new Error('用法：folio render article.md --out ./cards');
   if(command==='export'&&(!values.current||positionals.length||values.preset))throw new Error('用法：folio export --current --out ./cards');
+  const coverFile=values['cover-image'];
+  if(coverFile!==undefined){
+    if(command!=='render')throw new Error('--cover-image 仅适用于 folio render。');
+    if(!coverFile.trim())throw new Error('--cover-image 需要本地图片路径。');
+    if(values['no-cover'])throw new Error('--cover-image 和 --no-cover 不能同时使用。');
+  }
   let presetName=command==='export'?'current':(values.preset==='Text'?'text':values.preset)||'ai-pm';
   let preset=quickAiPm,presetFile;
   if(command==='render'){
@@ -160,12 +183,13 @@ async function main(args=process.argv.slice(2)){
       if(presetFile&&!Object.hasOwn(settings,'coverImage'))coverDir=path.dirname(presetFile);
       if(project.settings.ending&&!project.settings.question?.trim())throw new Error('启用结尾页时请使用 --question 或在预设中填写 question。');
       temp=await fs.mkdtemp(path.resolve(os.tmpdir(),'folio-cli-'));mediaDir=temp;
+      await prepareRenderCover(project,{coverFile,coverDir:coverDir||articleDir,mediaDir,sharedMediaDir:path.join(dataDir,'media')});
     }
     let html,pageKinds,title,warnings,result;
     const browser=await launchBrowser(process.env);
     const watchdog=setTimeout(()=>browser.close().catch(()=>{}),150000);watchdog.unref();
     try{
-      ({html,pageKinds,title,warnings}=await paginate(project,{articleDir,mediaDir,coverDir,sharedMediaDir:path.join(dataDir,'media'),browser}));
+      ({html,pageKinds,title,warnings}=await paginate(project,{articleDir,mediaDir,browser}));
       if(html.length>MAX_PAGES)throw new Error(`本稿有 ${html.length} 页，超过单次导出上限 ${MAX_PAGES} 页，请拆稿。`);
       result=await renderExport({html,title},{publicDir,mediaDir,env:process.env,browser});
     }finally{clearTimeout(watchdog);await browser.close().catch(()=>{});}
